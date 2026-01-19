@@ -1,0 +1,38 @@
+[
+  {
+    "label": "run: ralphex (debug)",
+    "command": "go run ./cmd/ralphex --debug",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "run: ralphex --review",
+    "command": "go run ./cmd/ralphex --review --debug",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "test: all",
+    "command": "go test -race -v ./...",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "test: app package",
+    "command": "go test -race -v ./app/...",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "lint",
+    "command": "golangci-lint run",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false
+  },
+  {
+    "label": "build",
+    "command": "make build",
+    "use_new_terminal": true,
+    "allow_concurrent_runs": false
+  }
+]

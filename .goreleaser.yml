@@ -1,0 +1,46 @@
+version: 2
+
+builds:
+  - id: ralphex
+    main: ./cmd/ralphex
+    binary: ralphex
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.revision={{.Tag}}-{{.ShortCommit}}-{{.CommitDate}}
+
+archives:
+  - id: ralphex
+    builds:
+      - ralphex
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
+
+nfpms:
+  - id: ralphex
+    package_name: ralphex
+    builds:
+      - ralphex
+    vendor: umputun
+    homepage: https://github.com/umputun/ralphex
+    maintainer: umputun
+    description: Autonomous plan execution with Claude Code
+    license: MIT
+    formats:
+      - deb
+      - rpm
+
+brews:
+  - repository:
+      owner: umputun
+      name: homebrew-tap
+    directory: Formula
+    homepage: https://github.com/umputun/ralphex
+    description: Autonomous plan execution with Claude Code
+    license: MIT
