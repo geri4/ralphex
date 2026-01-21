@@ -143,7 +143,7 @@ go install github.com/umputun/ralphex/cmd/ralphex@latest
 ### Using Homebrew
 
 ```bash
-brew install umputun/tap/ralphex
+brew install umputun/apps/ralphex
 ```
 
 ### From releases
