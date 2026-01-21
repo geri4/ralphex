@@ -16,7 +16,9 @@ make install    # install to ~/.local/bin
 
 ```
 cmd/ralphex/        # main entry point, CLI parsing
+pkg/config/         # configuration loading, defaults, prompts, agents
 pkg/executor/       # claude and codex CLI execution
+pkg/git/            # git operations using go-git library
 pkg/processor/      # orchestration loop, prompts, signals
 pkg/progress/       # timestamped logging with color
 docs/plans/         # plan files location
@@ -35,6 +37,33 @@ docs/plans/         # plan files location
 - Streaming output with timestamps
 - Progress logging to files
 - Multiple execution modes: full, review-only, codex-only
+- Configuration via `~/.config/ralphex/` with embedded defaults
+
+## Configuration
+
+- Config location: `~/.config/ralphex/`
+- Config file format: INI (using gopkg.in/ini.v1)
+- Embedded defaults in `pkg/config/defaults/`
+- Precedence: CLI flags > user config > embedded defaults
+- Custom prompts: `~/.config/ralphex/prompts/*.txt`
+- Custom agents: `~/.config/ralphex/agents/*.txt`
+
+### Agent System
+
+5 default agents are installed on first run to `~/.config/ralphex/agents/`:
+- `implementation.txt` - verifies code achieves stated goals
+- `quality.txt` - reviews for bugs, security issues, race conditions
+- `documentation.txt` - checks if docs need updates
+- `simplification.txt` - detects over-engineering
+- `testing.txt` - reviews test coverage and quality
+
+**Template syntax:** Use `{{agent:name}}` in prompt files to reference agents. Each reference expands to Task tool instructions that tell Claude Code to run that agent.
+
+**Customization:**
+- Edit files in `~/.config/ralphex/agents/` to modify agent prompts
+- Add new `.txt` files to create custom agents
+- Delete files and restart ralphex to restore defaults
+- Built-in Claude Code agents (like `qa-expert`, `go-smells-expert`) can be referenced directly in prompts
 
 ## Testing
 
@@ -50,69 +79,16 @@ Unit tests mock external calls. After ANY code changes, run e2e test with a toy 
 ### Create Toy Project
 
 ```bash
-# create test project
-mkdir -p /tmp/ralphex-test && cd /tmp/ralphex-test
-git init
-
-# create a simple Go file with intentional issues
-cat > main.go << 'EOF'
-package main
-
-import (
-    "fmt"
-    "os"
-)
-
-func main() {
-    data, _ := os.ReadFile("config.txt") // BUG: error ignored
-    fmt.Println("config:", string(data))
-}
-
-func unused() { // BUG: unused function
-    fmt.Println("never called")
-}
-EOF
-
-# create go.mod
-go mod init ralphex-test
-
-# create plan directory and plan file
-mkdir -p docs/plans
-
-cat > docs/plans/fix-issues.md << 'EOF'
-# Plan: Fix Code Issues
-
-## Overview
-Fix linting issues in the toy project.
-
-## Validation Commands
-- `go build ./...`
-- `go vet ./...`
-
-### Task 1: Fix error handling
-- [ ] Handle the error from os.ReadFile
-- [ ] Either log and exit or handle gracefully
-
-### Task 2: Remove unused function
-- [ ] Remove the unused() function
-- [ ] Verify go vet passes
-EOF
-
-# initial commit
-git add -A
-git commit -m "initial commit"
+./scripts/prep-toy-test.sh
 ```
+
+This creates `/tmp/ralphex-test` with a buggy Go file and a plan to fix it.
 
 ### Test Full Mode
 
 ```bash
 cd /tmp/ralphex-test
-
-# run ralphex in full mode using go run (tests current code)
-go run ~/dev.umputun/ralphex/cmd/ralphex docs/plans/fix-issues.md
-
-# or without argument (uses fzf to select)
-go run ~/dev.umputun/ralphex/cmd/ralphex
+.bin/ralphex docs/plans/fix-issues.md
 ```
 
 **Expected behavior:**
