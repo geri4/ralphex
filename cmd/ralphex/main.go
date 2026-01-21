@@ -233,20 +233,21 @@ func selectPlanWithFzf(ctx context.Context, plansDir string) (string, error) {
 		return "", fmt.Errorf("plans directory not found: %s", plansDir)
 	}
 
-	if _, err := exec.LookPath("fzf"); err != nil {
-		return "", errors.New("fzf not found, please provide plan file as argument")
-	}
-
 	// find plan files (excluding completed/)
 	plans, err := filepath.Glob(filepath.Join(plansDir, "*.md"))
 	if err != nil || len(plans) == 0 {
 		return "", fmt.Errorf("no plans found in %s", plansDir)
 	}
 
-	// auto-select if single plan
+	// auto-select if single plan (no fzf needed)
 	if len(plans) == 1 {
 		infoColor.Printf("auto-selected: %s\n", plans[0])
 		return plans[0], nil
+	}
+
+	// multiple plans require fzf
+	if _, lookupErr := exec.LookPath("fzf"); lookupErr != nil {
+		return "", errors.New("fzf not found, please provide plan file as argument")
 	}
 
 	// use fzf for selection
