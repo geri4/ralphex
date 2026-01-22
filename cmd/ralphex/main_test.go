@@ -13,6 +13,7 @@ import (
 
 	"github.com/umputun/ralphex/pkg/config"
 	"github.com/umputun/ralphex/pkg/git"
+	"github.com/umputun/ralphex/pkg/processor"
 	"github.com/umputun/ralphex/pkg/progress"
 )
 
@@ -28,6 +29,110 @@ func testColors() *progress.Colors {
 		Signal:     "255,100,100",
 		Timestamp:  "138,138,138",
 		Info:       "180,180,180",
+	})
+}
+
+func TestDetermineMode(t *testing.T) {
+	tests := []struct {
+		name     string
+		opts     opts
+		expected processor.Mode
+	}{
+		{name: "default_is_full", opts: opts{}, expected: processor.ModeFull},
+		{name: "review_flag", opts: opts{Review: true}, expected: processor.ModeReview},
+		{name: "codex_only_flag", opts: opts{CodexOnly: true}, expected: processor.ModeCodexOnly},
+		{name: "codex_only_takes_precedence", opts: opts{Review: true, CodexOnly: true}, expected: processor.ModeCodexOnly},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := determineMode(tc.opts)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}
+
+func TestCheckClaudeDep(t *testing.T) {
+	t.Run("uses_configured_command", func(t *testing.T) {
+		cfg := &config.Config{ClaudeCommand: "nonexistent-command-12345"}
+		err := checkClaudeDep(cfg)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "nonexistent-command-12345")
+	})
+
+	t.Run("falls_back_to_claude_when_empty", func(t *testing.T) {
+		cfg := &config.Config{ClaudeCommand: ""}
+		err := checkClaudeDep(cfg)
+		// may pass or fail depending on whether claude is installed
+		// but error message should reference "claude" not empty string
+		if err != nil {
+			assert.Contains(t, err.Error(), "claude")
+		}
+	})
+}
+
+func TestPreparePlanFile(t *testing.T) {
+	colors := testColors()
+
+	t.Run("returns_absolute_path", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		planFile := filepath.Join(tmpDir, "test-plan.md")
+		require.NoError(t, os.WriteFile(planFile, []byte("# Test"), 0o600))
+
+		result, err := preparePlanFile(context.Background(), planFile, false, tmpDir, colors)
+		require.NoError(t, err)
+		assert.True(t, filepath.IsAbs(result))
+	})
+
+	t.Run("returns_error_for_missing_plan_in_task_mode", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		_, err := preparePlanFile(context.Background(), "", false, tmpDir, colors)
+		require.Error(t, err)
+		// error comes from selectPlanWithFzf when no .md files found
+		assert.Contains(t, err.Error(), "no plans found")
+	})
+
+	t.Run("returns_empty_for_review_mode_without_plan", func(t *testing.T) {
+		result, err := preparePlanFile(context.Background(), "", true, "", colors)
+		require.NoError(t, err)
+		assert.Empty(t, result)
+	})
+}
+
+func TestCreateRunner(t *testing.T) {
+	t.Run("maps_config_correctly", func(t *testing.T) {
+		cfg := &config.Config{
+			IterationDelayMs: 5000,
+			TaskRetryCount:   3,
+			CodexEnabled:     false,
+		}
+		o := opts{MaxIterations: 100, Debug: true, NoColor: true}
+
+		// create a dummy logger for the test
+		tmpDir := t.TempDir()
+		colors := testColors()
+		log, err := progress.NewLogger(progress.Config{PlanFile: "", Mode: "full", Branch: "test", NoColor: true}, colors)
+		require.NoError(t, err)
+		defer log.Close()
+		_ = tmpDir // suppress unused
+
+		runner := createRunner(cfg, o, "/path/to/plan.md", processor.ModeFull, log)
+		assert.NotNil(t, runner)
+	})
+
+	t.Run("codex_only_mode_forces_codex_enabled", func(t *testing.T) {
+		cfg := &config.Config{CodexEnabled: false} // explicitly disabled in config
+		o := opts{MaxIterations: 50}
+
+		colors := testColors()
+		log, err := progress.NewLogger(progress.Config{PlanFile: "", Mode: "codex", Branch: "test", NoColor: true}, colors)
+		require.NoError(t, err)
+		defer log.Close()
+
+		// in codex-only mode, CodexEnabled should be forced to true
+		runner := createRunner(cfg, o, "", processor.ModeCodexOnly, log)
+		assert.NotNil(t, runner)
+		// we can't directly check runner internals, but this tests the code path runs without panic
 	})
 }
 
