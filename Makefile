@@ -65,4 +65,10 @@ e2e-codex: build
 	@echo ""
 	@echo "Monitor: tail -f /tmp/ralphex-review-test/progress-codex.txt"
 
-.PHONY: all build test lint fmt race version install e2e-prep e2e-review e2e-codex
+prep_site:
+	cp -fv README.md site/docs/index.md
+	cp -rv assets site/docs/
+	grep -v -E 'badge|coveralls|goreportcard' site/docs/index.md > site/docs/index.md.tmp && mv site/docs/index.md.tmp site/docs/index.md
+	cd site && pip install -r requirements.txt && mkdocs build
+
+.PHONY: all build test lint fmt race version install e2e-prep e2e-review e2e-codex prep_site

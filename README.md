@@ -16,14 +16,14 @@ Claude Code is powerful but interactive - it requires you to watch, approve, and
 
 ralphex solves both problems. Each task executes in a fresh Claude Code session with minimal context, keeping the model sharp throughout the entire plan. Write a plan with tasks and validation commands, start ralphex, and walk away. Come back to find your feature implemented, reviewed, and committed - or check the progress log to see what it's doing.
 
-<details>
+<details markdown>
 <summary>Task Execution Screenshot</summary>
 
 ![ralphex tasks](assets/ralphex-tasks.png)
 
 </details>
 
-<details>
+<details markdown>
 <summary>Review Mode Screenshot</summary>
 
 ![ralphex review](assets/ralphex-review.png)
@@ -70,42 +70,10 @@ ralphex will create a branch, execute tasks, commit results, run multi-phase rev
 
 ralphex executes plans in four phases with automated code reviews.
 
-<details>
+<details markdown>
 <summary>Execution Flow Diagram</summary>
 
-```mermaid
-flowchart TD
-    subgraph P1["Phase 1: Task Execution"]
-        T1[Read Task] --> T2[Execute via Claude]
-        T2 --> T3[Validate & Commit]
-        T3 --> T4{More tasks?}
-        T4 -->|Yes| T1
-    end
-
-    subgraph P2["Phase 2: First Code Review"]
-        R1[Run N agents] --> R2{Issues?}
-        R2 -->|Yes| R3[Fix & Commit]
-        R3 --> R1
-    end
-
-    subgraph P3["Phase 3: Codex External Review"]
-        C1[Codex reviews] --> C2[Claude evaluates]
-        C2 --> C3{Issues?}
-        C3 -->|Yes| C4[Fix & Commit]
-        C4 --> C1
-    end
-
-    subgraph P4["Phase 4: Second Code Review"]
-        S1[Run 2 agents] --> S2{Issues?}
-        S2 -->|Yes| S3[Fix & Commit]
-        S3 --> S1
-    end
-
-    T4 -->|No| R1
-    R2 -->|No| C1
-    C3 -->|No| S1
-    S2 -->|No| Done[Move plan to completed/]
-```
+![ralphex flow](assets/ralphex-flow.png)
 
 </details>
 
