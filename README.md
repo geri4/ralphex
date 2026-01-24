@@ -99,7 +99,7 @@ Launches 5 review agents **in parallel** via Claude Code Task tool:
 
 Claude verifies findings, fixes confirmed issues, and commits.
 
-*These are the default agents. Customize via `~/.config/ralphex/agents/` and `prompts/review_first.txt`.*
+*[Default agents](https://github.com/umputun/ralphex/tree/master/pkg/config/defaults/agents) provide common, language-agnostic review steps. They can be customized and tuned for your specific needs, languages, and workflows. See [Customization](#customization) for details.*
 
 ### Phase 3: Codex External Review (optional)
 
@@ -234,14 +234,14 @@ The entire system is designed for customization - both task execution and review
 **Agent files** (`~/.config/ralphex/agents/`):
 - Edit existing files to modify agent behavior
 - Add new `.txt` files to create custom agents
-- Delete files and restart to restore defaults
-- Reference built-in Claude Code agents (like `qa-expert`, `code-reviewer`) directly
+- Delete all files and restart to restore defaults
+- Alternatively, reference agents already installed in your Claude Code directly in prompt files (see example below)
 
 **Prompt files** (`~/.config/ralphex/prompts/`):
 - `task.txt` - task execution prompt
-- `review_first.txt` - first review prompt (can use custom and built-in Claude agents)
+- `review_first.txt` - comprehensive review (default: 5 language-agnostic agents - quality, implementation, testing, simplification, documentation; customizable)
 - `codex.txt` - codex review prompt
-- `review_second.txt` - second review prompt (can use custom and built-in Claude agents)
+- `review_second.txt` - final review, critical/major issues only (default: 2 agents - quality, implementation; customizable)
 
 **Comment syntax:**
 Lines starting with `#` (after optional whitespace) are treated as comments and stripped when loading prompt and agent files. Use comments to document your customizations:
@@ -260,6 +260,18 @@ Note: Inline comments are not supported (`text # comment` keeps the entire line)
 - Remove `simplification` agent if over-engineering isn't a concern
 - Create language-specific agents (Python linting, TypeScript types)
 - Modify prompts to change how many agents run per phase
+
+**Using Claude Code agents directly:**
+
+Instead of creating agent files, you can reference agents installed in your Claude Code directly in prompt files:
+
+```txt
+# in review_first.txt - just list agent names with their prompts
+Agents to launch:
+1. qa-expert - "Review for bugs and security issues"
+2. go-test-expert - "Review test coverage and quality"
+3. go-smells-expert - "Review for code smells"
+```
 
 ## Requirements
 
@@ -333,6 +345,63 @@ Colors use 24-bit RGB (true color), supported natively by all modern terminals (
 ### Custom prompts
 
 Place custom prompt files in `~/.config/ralphex/prompts/` to override the built-in prompts. Missing files fall back to embedded defaults. See [Review Agents](#review-agents) section for agent customization.
+
+<details markdown>
+<summary><b>FAQ</b></summary>
+
+**I installed ralphex, what do I do next?**
+
+Create a plan file in `docs/plans/` (see [Quick Start](#quick-start) for format), then run `ralphex docs/plans/your-plan.md`. ralphex will create a branch, execute tasks, and run reviews automatically.
+
+**Why are there two review phases?**
+
+First review is comprehensive (5 agents by default), second is a final check focusing on critical/major issues only (2 agents). See [How It Works](#how-it-works).
+
+**How do I use my own Claude Code agents?**
+
+Reference them directly in prompt files by name, e.g., `qa-expert - "Review for bugs"`. See [Customization](#customization).
+
+**What if codex isn't installed?**
+
+Codex is optional. If not installed, the codex review phase is skipped automatically.
+
+**Can I run just reviews without task execution?**
+
+Yes, use `--review` flag. See [CLI Options](#cli-options).
+
+**Can I run ralphex in a non-git directory?**
+
+No. Git is required for branch management, automatic commits, and diff-based code reviews.
+
+**Should I run ralphex on master or a feature branch?**
+
+For full mode, start on master - ralphex creates a branch automatically from the plan filename. For `--review` mode, switch to your feature branch first - reviews compare against master using `git diff master...HEAD`.
+
+**How do I restore default agents after customizing?**
+
+Delete all `.txt` files from `~/.config/ralphex/agents/` and restart ralphex.
+
+**How does local .ralphex/ config interact with global config?**
+
+Priority: CLI flags > local `.ralphex/config` > global `~/.config/ralphex/config` > embedded defaults. Each local setting overrides the corresponding global one—no need to duplicate the entire file. For agents: if local `agents/` has any `.txt` files, it replaces global agents entirely.
+
+**What happens to uncommitted changes if ralphex fails?**
+
+Ralphex commits after each completed task. If execution fails, completed tasks are already committed to the feature branch. Uncommitted changes from the failed task remain in the working directory for manual inspection.
+
+**What's the difference between progress file and plan file?**
+
+Progress file (`progress-*.txt`) is a real-time execution log—tail it to monitor. Plan file tracks task state (`[ ]` vs `[x]`). To resume, re-run ralphex on the plan file; it finds incomplete tasks automatically.
+
+**Do I need to commit changes before running ralphex?**
+
+No, but recommended. Ralphex creates a new branch and commits per-task. Pre-existing uncommitted changes stay untouched but may cause confusion about what's part of the plan.
+
+**What's the difference between agents/ and prompts/?**
+
+Agents define *what* to check (review instructions). Prompts define *how* the workflow runs (execution steps, signal handling).
+
+</details>
 
 ## For LLMs
 

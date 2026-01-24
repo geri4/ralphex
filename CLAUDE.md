@@ -95,7 +95,7 @@ project/
 - Edit files in `~/.config/ralphex/agents/` to modify agent prompts
 - Add new `.txt` files to create custom agents
 - Delete ALL `.txt` files from the directory and restart ralphex to restore defaults
-- Built-in Claude Code agents (like `qa-expert`, `go-smells-expert`) can be referenced directly in prompts
+- Alternatively, reference agents installed in your Claude Code directly in prompt files (like `qa-expert`, `go-smells-expert`)
 
 ## Testing
 
