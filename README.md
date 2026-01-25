@@ -454,9 +454,41 @@ Multi-session features:
 - **Active detection** - pulsing indicator for running sessions via file locking
 - **Auto-discovery** - new sessions appear automatically as they start
 
+## Claude Code Integration (Optional)
+
+ralphex works standalone from the terminal. Optionally, you can add slash commands to Claude Code for a more integrated experience.
+
+### Available Commands
+
+| Command | Description |
+|---------|-------------|
+| `/ralphex` | Launch and monitor ralphex execution with interactive mode/plan selection |
+| `/ralphex-plan` | Create structured implementation plans with guided context gathering |
+
+### Installation
+
+The slash command definitions are hosted at:
+- [`/ralphex`](https://ralphex.umputun.dev/assets/claude/ralphex.md)
+- [`/ralphex-plan`](https://ralphex.umputun.dev/assets/claude/ralphex-plan.md)
+
+To install, ask Claude Code to "install ralphex slash commands" or manually copy the files to `~/.claude/commands/`.
+
+### Usage
+
+Once installed:
+
+```
+# in Claude Code conversation
+/ralphex-plan add user authentication    # creates plan interactively
+/ralphex docs/plans/auth.md              # launches execution
+"check ralphex"                          # gets status update
+```
+
+The `/ralphex` command runs ralphex in the background and provides status updates on request. The `/ralphex-plan` command guides you through creating well-structured plans with context discovery and approach selection.
+
 ## For LLMs
 
-See [llms.txt](llms.txt) for LLM-optimized documentation and Claude Code integration.
+See [llms.txt](llms.txt) for LLM-optimized documentation.
 
 ## License
 
