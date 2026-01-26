@@ -707,6 +707,51 @@ func TestRepo_IsDirty(t *testing.T) {
 		// this documents the behavior - go-git reports absolute symlinks as modified
 		assert.True(t, dirty, "go-git reports absolute symlinks as modified (expected quirk)")
 	})
+
+	t.Run("gitignored dangling symlink should not make repo dirty", func(t *testing.T) {
+		// reproduces issue #28: browser state files like Chrome's SingletonSocket
+		// are gitignored but go-git reports them as modified when they dangle
+		dir := setupTestRepo(t)
+		repo, err := Open(dir)
+		require.NoError(t, err)
+
+		// create gitignore for browser-state directory (mimics real .gitignore)
+		gitignorePath := filepath.Join(dir, ".gitignore")
+		err = os.WriteFile(gitignorePath, []byte("browser-state/\n"), 0o600)
+		require.NoError(t, err)
+
+		// commit gitignore
+		err = repo.Add(".gitignore")
+		require.NoError(t, err)
+		err = repo.Commit("add gitignore")
+		require.NoError(t, err)
+
+		// create gitignored directory with a symlink to external temp file
+		browserDir := filepath.Join(dir, "browser-state")
+		err = os.MkdirAll(browserDir, 0o750)
+		require.NoError(t, err)
+
+		// create temp file outside repo (like Chrome's socket in /tmp)
+		tmpFile, err := os.CreateTemp("", "singleton-*")
+		require.NoError(t, err)
+		tmpPath := tmpFile.Name()
+		tmpFile.Close()
+
+		// create symlink in gitignored directory pointing to temp file
+		socketPath := filepath.Join(browserDir, "SingletonSocket")
+		err = os.Symlink(tmpPath, socketPath)
+		require.NoError(t, err)
+
+		// delete the temp file - symlink now dangles (simulates Chrome exiting)
+		err = os.Remove(tmpPath)
+		require.NoError(t, err)
+
+		// this dangling symlink is in a gitignored directory
+		// native git shows clean, go-git might report it as modified
+		dirty, err := repo.IsDirty()
+		require.NoError(t, err)
+		assert.False(t, dirty, "gitignored dangling symlink should not make repo dirty")
+	})
 }
 
 func TestRepo_IsIgnored(t *testing.T) {
