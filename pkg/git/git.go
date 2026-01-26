@@ -348,19 +348,20 @@ func (r *Repo) HasChangesOtherThan(filePath string) (bool, error) {
 		if path == relPath {
 			continue // skip the target file
 		}
-		if r.fileHasChanges(s) {
-			// for untracked files, check if they're gitignored
-			if s.Worktree == git.Untracked && s.Staging == git.Unmodified {
-				ignored, err := r.IsIgnored(path)
-				if err != nil {
-					return false, fmt.Errorf("check ignored: %w", err)
-				}
-				if ignored {
-					continue // skip gitignored untracked files
-				}
-			}
-			return true, nil
+		if !r.fileHasChanges(s) {
+			continue
 		}
+		// for untracked files, check if they're gitignored
+		if s.Worktree == git.Untracked && s.Staging == git.Unmodified {
+			ignored, err := r.IsIgnored(path)
+			if err != nil {
+				return false, fmt.Errorf("check ignored: %w", err)
+			}
+			if ignored {
+				continue // skip gitignored untracked files
+			}
+		}
+		return true, nil
 	}
 
 	return false, nil
