@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.2 - 2026-01-26
+
+### Fixed
+
+- HasChangesOtherThan now ignores gitignored files (#34)
+- Handle permission errors in plan directory detection
+
 ## v0.4.1 - 2026-01-26
 
 ### Added
