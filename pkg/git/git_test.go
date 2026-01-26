@@ -586,6 +586,127 @@ func TestRepo_IsDirty(t *testing.T) {
 		require.NoError(t, err)
 		assert.False(t, dirty)
 	})
+
+	t.Run("gitignored file should not make repo dirty", func(t *testing.T) {
+		// reproduces issue #28: go-git reports gitignored files unlike native git
+		dir := setupTestRepo(t)
+		repo, err := Open(dir)
+		require.NoError(t, err)
+
+		// create .gitignore with patterns
+		gitignorePath := filepath.Join(dir, ".gitignore")
+		err = os.WriteFile(gitignorePath, []byte("ignored.txt\n*.log\nbuild/\n"), 0o600)
+		require.NoError(t, err)
+
+		// commit gitignore so it takes effect
+		err = repo.Add(".gitignore")
+		require.NoError(t, err)
+		err = repo.Commit("add gitignore")
+		require.NoError(t, err)
+
+		// create files that match gitignore patterns
+		ignoredFile := filepath.Join(dir, "ignored.txt")
+		err = os.WriteFile(ignoredFile, []byte("should be ignored"), 0o600)
+		require.NoError(t, err)
+
+		logFile := filepath.Join(dir, "debug.log")
+		err = os.WriteFile(logFile, []byte("log content"), 0o600)
+		require.NoError(t, err)
+
+		// create ignored directory with files
+		buildDir := filepath.Join(dir, "build")
+		err = os.MkdirAll(buildDir, 0o750)
+		require.NoError(t, err)
+		buildFile := filepath.Join(buildDir, "output.bin")
+		err = os.WriteFile(buildFile, []byte("binary"), 0o600)
+		require.NoError(t, err)
+
+		// native git would show clean, go-git might report dirty
+		dirty, err := repo.IsDirty()
+		require.NoError(t, err)
+		assert.False(t, dirty, "gitignored files should not make repo dirty")
+	})
+
+	t.Run("dangling symlink should not make repo dirty", func(t *testing.T) {
+		// reproduces issue #28: dangling symlinks reported as modified by go-git
+		dir := setupTestRepo(t)
+		repo, err := Open(dir)
+		require.NoError(t, err)
+
+		// create a target file
+		targetFile := filepath.Join(dir, "target.txt")
+		err = os.WriteFile(targetFile, []byte("target content"), 0o600)
+		require.NoError(t, err)
+
+		// create symlink pointing to it (using relative path - how git stores symlinks)
+		symlinkPath := filepath.Join(dir, "link.txt")
+		err = os.Symlink("target.txt", symlinkPath) // relative, not absolute
+		require.NoError(t, err)
+
+		// commit both
+		err = repo.Add("target.txt")
+		require.NoError(t, err)
+		err = repo.Add("link.txt")
+		require.NoError(t, err)
+		err = repo.Commit("add file and symlink")
+		require.NoError(t, err)
+
+		// verify clean after commit
+		dirty, err := repo.IsDirty()
+		require.NoError(t, err)
+		require.False(t, dirty, "should be clean after commit")
+
+		// delete the target file, making symlink dangle
+		err = os.Remove(targetFile)
+		require.NoError(t, err)
+
+		// stage removal of target
+		wt, err := repo.repo.Worktree()
+		require.NoError(t, err)
+		_, err = wt.Remove("target.txt")
+		require.NoError(t, err)
+		err = repo.Commit("remove target")
+		require.NoError(t, err)
+
+		// now only the dangling symlink remains
+		// native git shows clean, go-git might report dirty
+		dirty, err = repo.IsDirty()
+		require.NoError(t, err)
+		assert.False(t, dirty, "dangling symlink should not make repo dirty")
+	})
+
+	t.Run("absolute symlink appears modified to go-git", func(t *testing.T) {
+		// documents go-git quirk: symlinks with absolute paths are reported as modified
+		// because go-git stores symlink target in index, absolute path differs from what was committed
+		dir := setupTestRepo(t)
+		repo, err := Open(dir)
+		require.NoError(t, err)
+
+		// create a target file
+		targetFile := filepath.Join(dir, "target.txt")
+		err = os.WriteFile(targetFile, []byte("target content"), 0o600)
+		require.NoError(t, err)
+
+		// create symlink with ABSOLUTE path (this is the problematic case)
+		symlinkPath := filepath.Join(dir, "link.txt")
+		err = os.Symlink(targetFile, symlinkPath) // absolute path
+		require.NoError(t, err)
+
+		// commit
+		err = repo.Add("target.txt")
+		require.NoError(t, err)
+		err = repo.Add("link.txt")
+		require.NoError(t, err)
+		err = repo.Commit("add file and absolute symlink")
+		require.NoError(t, err)
+
+		// go-git will report this as dirty because symlink target in worktree (absolute)
+		// differs from what git stored (relative). this is expected go-git behavior.
+		dirty, err := repo.IsDirty()
+		require.NoError(t, err)
+		// this documents the behavior - go-git reports absolute symlinks as modified
+		assert.True(t, dirty, "go-git reports absolute symlinks as modified (expected quirk)")
+	})
 }
 
 func TestRepo_IsIgnored(t *testing.T) {
