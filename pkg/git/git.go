@@ -293,13 +293,14 @@ func (r *Repo) IsIgnored(path string) (bool, error) {
 	// read gitignore patterns from the worktree (.gitignore files)
 	patterns, _ := gitignore.ReadPatterns(wt.Filesystem, nil)
 
-	// load global patterns from ~/.gitconfig's core.excludesfile
+	// load global patterns: prefer core.excludesfile, fallback to XDG location
 	rootFS := osfs.New("/")
 	if globalPatterns, err := gitignore.LoadGlobalPatterns(rootFS); err == nil && len(globalPatterns) > 0 {
+		// core.excludesfile is configured and has patterns
 		patterns = append(patterns, globalPatterns...)
-	} else {
-		// fallback to default XDG location if core.excludesfile not set
-		// git uses $XDG_CONFIG_HOME/git/ignore (defaults to ~/.config/git/ignore)
+	} else if !hasGlobalExcludesFile() {
+		// core.excludesfile is NOT configured, fallback to XDG location
+		// (if core.excludesfile IS configured but empty, that's intentional - no fallback)
 		patterns = append(patterns, loadXDGGlobalPatterns()...)
 	}
 
@@ -311,6 +312,36 @@ func (r *Repo) IsIgnored(path string) (bool, error) {
 	matcher := gitignore.NewMatcher(patterns)
 	pathParts := strings.Split(filepath.ToSlash(path), "/")
 	return matcher.Match(pathParts, false), nil
+}
+
+// hasGlobalExcludesFile checks if core.excludesfile is configured in global gitconfig.
+func hasGlobalExcludesFile() bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+
+	// check ~/.gitconfig for core.excludesfile
+	gitconfigPath := filepath.Join(home, ".gitconfig")
+	data, err := os.ReadFile(gitconfigPath) //nolint:gosec // user's gitconfig
+	if err != nil {
+		return false
+	}
+
+	// simple check: look for excludesfile in [core] section
+	// this handles the common case without full INI parsing
+	inCore := false
+	for line := range strings.SplitSeq(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "[") {
+			inCore = strings.HasPrefix(strings.ToLower(line), "[core]")
+			continue
+		}
+		if inCore && strings.HasPrefix(strings.ToLower(line), "excludesfile") {
+			return true
+		}
+	}
+	return false
 }
 
 // loadXDGGlobalPatterns loads gitignore patterns from the default XDG location.
