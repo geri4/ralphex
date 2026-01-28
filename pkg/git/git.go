@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -85,6 +86,59 @@ func (r *Repo) HasCommits() (bool, error) {
 		return false, fmt.Errorf("get HEAD: %w", err)
 	}
 	return true, nil
+}
+
+// CreateInitialCommit stages all non-ignored files and creates an initial commit.
+// Returns error if no files to stage or commit fails.
+// Respects local, global, and system gitignore patterns via IsIgnored.
+func (r *Repo) CreateInitialCommit(message string) error {
+	wt, err := r.repo.Worktree()
+	if err != nil {
+		return fmt.Errorf("get worktree: %w", err)
+	}
+
+	// get status to find untracked files
+	status, err := wt.Status()
+	if err != nil {
+		return fmt.Errorf("get status: %w", err)
+	}
+
+	// collect untracked paths and sort for deterministic staging order
+	var paths []string
+	for path, s := range status {
+		if s.Worktree == git.Untracked {
+			paths = append(paths, path)
+		}
+	}
+	sort.Strings(paths)
+
+	// stage each untracked file that's not ignored
+	staged := 0
+	for _, path := range paths {
+		ignored, ignoreErr := r.IsIgnored(path)
+		if ignoreErr != nil {
+			return fmt.Errorf("check ignored %s: %w", path, ignoreErr)
+		}
+		if ignored {
+			continue
+		}
+		if _, addErr := wt.Add(path); addErr != nil {
+			return fmt.Errorf("stage %s: %w", path, addErr)
+		}
+		staged++
+	}
+
+	if staged == 0 {
+		return errors.New("no files to commit")
+	}
+
+	author := r.getAuthor()
+	_, err = wt.Commit(message, &git.CommitOptions{Author: author})
+	if err != nil {
+		return fmt.Errorf("commit: %w", err)
+	}
+
+	return nil
 }
 
 // CurrentBranch returns the name of the current branch, or empty string for detached HEAD state.
@@ -284,17 +338,24 @@ func (r *Repo) getAuthor() *object.Signature {
 // Checks local .gitignore files, global gitignore (from core.excludesfile or default
 // XDG location ~/.config/git/ignore), and system gitignore (/etc/gitconfig).
 // Returns false, nil if no gitignore rules exist.
+//
+// Precedence (highest to lowest): local .gitignore > global > system.
+// go-git's Matcher checks patterns from end-to-start, so patterns at end have higher priority.
 func (r *Repo) IsIgnored(path string) (bool, error) {
 	wt, err := r.repo.Worktree()
 	if err != nil {
 		return false, fmt.Errorf("get worktree: %w", err)
 	}
 
-	// read gitignore patterns from the worktree (.gitignore files)
-	patterns, _ := gitignore.ReadPatterns(wt.Filesystem, nil)
-
-	// load global patterns from ~/.gitconfig's core.excludesfile
+	var patterns []gitignore.Pattern
 	rootFS := osfs.New("/")
+
+	// load system patterns first (lowest priority)
+	if systemPatterns, err := gitignore.LoadSystemPatterns(rootFS); err == nil {
+		patterns = append(patterns, systemPatterns...)
+	}
+
+	// load global patterns (middle priority)
 	if globalPatterns, err := gitignore.LoadGlobalPatterns(rootFS); err == nil && len(globalPatterns) > 0 {
 		patterns = append(patterns, globalPatterns...)
 	} else {
@@ -303,10 +364,9 @@ func (r *Repo) IsIgnored(path string) (bool, error) {
 		patterns = append(patterns, loadXDGGlobalPatterns()...)
 	}
 
-	// load system patterns from /etc/gitconfig's core.excludesfile
-	if systemPatterns, err := gitignore.LoadSystemPatterns(rootFS); err == nil {
-		patterns = append(patterns, systemPatterns...)
-	}
+	// load local patterns last (highest priority)
+	localPatterns, _ := gitignore.ReadPatterns(wt.Filesystem, nil)
+	patterns = append(patterns, localPatterns...)
 
 	matcher := gitignore.NewMatcher(patterns)
 	pathParts := strings.Split(filepath.ToSlash(path), "/")
